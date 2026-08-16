@@ -62,7 +62,7 @@ All 5 models were trained on the same 80/20 train/test split
 | Naive Bayes | 0.6558 | 0.8093 | 0.4269 | 0.8663 | 0.5719 | 0.3951 |
 | Random Forest (Ensemble) | 0.8048 | 0.8330 | 0.6645 | 0.5348 | 0.5926 | 0.4710 |
 
-*(Reproducible via `model/train_models.py`; raw values also saved in
+*(Reproducible via `model/train_models.py`and raw values also saved in
 `model/metrics_summary.csv`.)*
 
 ### Observations
@@ -101,7 +101,7 @@ ML_Assignment2_Project/
 
 ## Setup
 
-```bash
+```
 python -m venv venv
 
 # Windows:
@@ -130,8 +130,8 @@ streamlit run app.py
   is present)
 
 To try it: upload `test_data.csv` from the root of this repo, pick a
-model, and explore the results. Retrain from scratch with
-`cd model && python train_models.py` if needed.
+model, and the results are displayed. If needed we can retrain from scratch with
+`cd model && python train_models.py`.
 
 ## Live Streamlit App
 
