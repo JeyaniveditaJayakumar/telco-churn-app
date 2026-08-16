@@ -44,7 +44,8 @@ offers before they leave.
 
 ## c. GitHub Repository Link
 
-**`<PASTE YOUR GITHUB REPOSITORY LINK HERE>`**
+https://github.com/JeyaniveditaJayakumar/telco-churn-app
+
 
 ## d. Models Used
 
@@ -79,7 +80,7 @@ All 5 models were trained on the same 80/20 train/test split
 
 ```
 ML_Assignment2_Project/
-├── app.py                          # Streamlit app
+├── app.py                          # Streamlit app .py
 ├── requirements.txt
 ├── README.md
 ├── test_data.csv                   # held-out test split (upload this to the app)
@@ -134,4 +135,4 @@ model, and explore the results. Retrain from scratch with
 
 ## Live Streamlit App
 
-**`<PASTE YOUR DEPLOYED STREAMLIT APP LINK HERE>`**
+https://telco-churn-app-yadejhff5z6sor4x8hu9ne.streamlit.app/
