@@ -2,16 +2,12 @@
 
 ## a. Problem Statement
 
-Customer churn — when a subscriber stops using a company's service —
-is one of the most expensive problems in subscription-based businesses,
-since acquiring a new customer typically costs far more than retaining
-an existing one. This project builds and compares five supervised
-classification models to predict, from a customer's account and
-service-usage attributes, **whether that customer will churn (leave
-the service) or not**. This is a **binary classification** problem
-(`Churn` = `Yes` / `No`). An accurate, interpretable model lets a
-telecom provider proactively target at-risk customers with retention
-offers before they leave.
+Losing existing customers, known as churn, is a costly challenge for companies that rely on subscriptions, 
+since retaining a current customer is generally far cheaper than winning a new one. This project develops 
+and evaluates five supervised classification models that use a customer's account details and service usage 
+patterns to predict whether they are likely to leave the service. The task is framed as a binary classification 
+problem, where the target variable (Churn) takes a value of Yes or No. A reliable and interpretable model gives 
+telecom providers the ability to identify at-risk customers early and intervene with retention strategies before they churn.
 
 ## b. Dataset Description
 
