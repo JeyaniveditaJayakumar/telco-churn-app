@@ -22,17 +22,95 @@ from sklearn.metrics import (
     roc_auc_score, precision_score, recall_score, f1_score, matthews_corrcoef
 )
 
-st.set_page_config(page_title="Telco Churn — Model Explorer", layout="wide")
-
-st.title("📞 Telco Customer Churn — Classification Model Explorer")
-st.markdown(
-    "This app demonstrates **5 classification models** trained on the "
-    "[Telco Customer Churn](https://www.kaggle.com/datasets/blastchar/telco-customer-churn) "
-    "dataset to predict whether a customer will churn. Upload a **test CSV** "
-    "with the required feature columns to see live evaluation results — "
-    "column order, extra columns, and minor naming differences are handled "
-    "automatically."
+# ===========================================================
+# Page config & global styling
+# ===========================================================
+st.set_page_config(
+    page_title="Telco Churn — Model Explorer",
+    page_icon="📞",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
+
+CUSTOM_CSS = """
+<style>
+    /* ---- overall spacing ---- */
+    .block-container {
+        padding-top: 2rem;
+        padding-bottom: 3rem;
+    }
+
+    /* ---- hero header ---- */
+    .hero {
+        background: linear-gradient(135deg, #7C3AED 0%, #4F46E5 55%, #2563EB 100%);
+        padding: 2rem 2.25rem;
+        border-radius: 16px;
+        color: white;
+        margin-bottom: 1.5rem;
+        box-shadow: 0 10px 30px rgba(79, 70, 229, 0.25);
+    }
+    .hero h1 {
+        margin: 0 0 0.4rem 0;
+        font-size: 1.9rem;
+        font-weight: 700;
+    }
+    .hero p {
+        margin: 0;
+        opacity: 0.92;
+        font-size: 0.98rem;
+        line-height: 1.5;
+    }
+
+    /* ---- section headers ---- */
+    .section-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        margin: 0.25rem 0 0.75rem 0;
+        color: #1F2937;
+    }
+
+    /* ---- info / status pills ---- */
+    .pill {
+        display: inline-block;
+        padding: 0.2rem 0.7rem;
+        border-radius: 999px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        margin-bottom: 0.6rem;
+    }
+    .pill-green { background: #DCFCE7; color: #15803D; }
+    .pill-blue  { background: #DBEAFE; color: #1D4ED8; }
+
+    /* ---- metric cards ---- */
+    div[data-testid="stMetric"] {
+        background: #FFFFFF;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        padding: 0.9rem 1rem 0.6rem 1rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    }
+
+    /* ---- dataframes ---- */
+    div[data-testid="stDataFrame"] {
+        border-radius: 10px;
+        overflow: hidden;
+    }
+
+    /* ---- sidebar ---- */
+    section[data-testid="stSidebar"] {
+        border-right: 1px solid #E5E7EB;
+    }
+
+    /* ---- footer ---- */
+    .footer-note {
+        text-align: center;
+        color: #9CA3AF;
+        font-size: 0.8rem;
+        margin-top: 2.5rem;
+    }
+</style>
+"""
+st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
 MODEL_FILES = {
     "Logistic Regression": "model/logistic_regression.pkl",
@@ -42,9 +120,22 @@ MODEL_FILES = {
     "Random Forest (Ensemble)": "model/random_forest.pkl",
 }
 
+MODEL_ICONS = {
+    "Logistic Regression": "📈",
+    "Decision Tree": "🌳",
+    "KNN": "📍",
+    "Naive Bayes": "🎲",
+    "Random Forest (Ensemble)": "🌲",
+}
+
 TARGET_COL_ALIASES = ["churn", "target", "class", "label", "y", "outcome"]
 
+CONFUSION_MATRIX_FIGSIZE = (2.6, 2.2)  # small, fixed-size confusion matrix
 
+
+# ===========================================================
+# Cached loaders
+# ===========================================================
 @st.cache_resource
 def load_artifacts():
     scaler = joblib.load("model/scaler.pkl")
@@ -58,6 +149,9 @@ def load_model(path):
     return joblib.load(path)
 
 
+# ===========================================================
+# Helpers
+# ===========================================================
 def normalize_col(col: str) -> str:
     """Lowercase, strip, collapse whitespace/underscores for fuzzy matching."""
     return re.sub(r"[\s_]+", " ", str(col).strip().lower())
@@ -111,6 +205,34 @@ def coerce_target(y_series, target_encoder):
     return mapped.astype(int), None
 
 
+def section_title(text: str):
+    st.markdown(f'<div class="section-title">{text}</div>', unsafe_allow_html=True)
+
+
+def pill(text: str, kind: str = "blue"):
+    st.markdown(f'<span class="pill pill-{kind}">{text}</span>', unsafe_allow_html=True)
+
+
+def render_confusion_matrix(y_true, y_pred, class_names):
+    """Small, fixed-size confusion matrix heatmap, centered in a narrow column."""
+    cm = confusion_matrix(y_true, y_pred)
+    fig, ax = plt.subplots(figsize=CONFUSION_MATRIX_FIGSIZE)
+    sns.heatmap(
+        cm, annot=True, fmt="d", cmap="Purples", ax=ax,
+        xticklabels=[str(c) for c in class_names],
+        yticklabels=[str(c) for c in class_names],
+        cbar=False, linewidths=0.5, linecolor="white",
+        annot_kws={"size": 9},
+    )
+    ax.set_xlabel("Predicted", fontsize=8)
+    ax.set_ylabel("Actual", fontsize=8)
+    ax.tick_params(labelsize=8)
+    fig.tight_layout()
+    left, mid, right = st.columns([1, 1, 1])
+    with mid:
+        st.pyplot(fig, use_container_width=False)
+
+
 scaler, feature_names, target_encoder = load_artifacts()
 CLASS_NAMES = list(target_encoder.classes_)
 
@@ -119,27 +241,63 @@ def label_for(code):
     return target_encoder.inverse_transform([code])[0]
 
 
-# ---------------------------------------------------------
-# Sidebar controls
-# ---------------------------------------------------------
-st.sidebar.header("Controls")
-uploaded_file = st.sidebar.file_uploader("Upload test CSV", type=["csv"])
-model_choice = st.sidebar.selectbox("Select a model", list(MODEL_FILES.keys()))
-
-st.sidebar.markdown("---")
-st.sidebar.markdown(
-    f"**Note:** The uploaded CSV must contain the {len(feature_names)} required "
-    "feature columns (column order and extra columns don't matter — see "
-    "`model/feature_names.pkl` or the README for the exact list, matching "
-    "`data/test_data.csv`). A target column is optional — include one "
-    f"(named `Churn`, `target`, `class`, `label`, etc., with values from "
-    f"{CLASS_NAMES}) to see evaluation metrics; without it you'll still "
-    "get predictions."
+# ===========================================================
+# Hero header
+# ===========================================================
+st.markdown(
+    """
+    <div class="hero">
+        <h1>📞 Telco Customer Churn — Model Explorer</h1>
+        <p>
+            Compare <b>5 classification models</b> trained on the
+            <a href="https://www.kaggle.com/datasets/blastchar/telco-customer-churn"
+               style="color:#E0E7FF; text-decoration:underline;" target="_blank">
+               Telco Customer Churn</a> dataset. Upload a test CSV to get live
+            predictions and evaluation metrics — column order, extra columns, and
+            minor naming differences are handled automatically.
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
 
-# ---------------------------------------------------------
+# ===========================================================
+# Sidebar controls
+# ===========================================================
+with st.sidebar:
+    st.markdown("### ⚙️ Controls")
+    uploaded_file = st.file_uploader("Upload test CSV", type=["csv"])
+
+    view_mode = st.radio(
+        "View",
+        ["Single Model", "Compare All Models"],
+        help="Single Model: explore one model in depth. "
+             "Compare All Models: run every model on the same data side by side.",
+    )
+
+    model_choice = None
+    if view_mode == "Single Model":
+        model_choice = st.selectbox(
+            "Select a model",
+            list(MODEL_FILES.keys()),
+            format_func=lambda m: f"{MODEL_ICONS.get(m, '🔹')}  {m}",
+        )
+
+    st.markdown("---")
+    with st.expander("ℹ️  Data requirements", expanded=not uploaded_file):
+        st.markdown(
+            f"- Must contain the **{len(feature_names)} required feature columns** "
+            "(order doesn't matter, extra columns are ignored).\n"
+            "- See `model/feature_names.pkl` or the README for the exact list "
+            "(matches `data/test_data.csv`).\n"
+            "- A **target column is optional** — include one named `Churn`, "
+            f"`target`, `class`, `label`, etc. with values from `{CLASS_NAMES}` "
+            "to unlock evaluation metrics; without it you'll still get predictions."
+        )
+
+# ===========================================================
 # Main logic
-# ---------------------------------------------------------
+# ===========================================================
 if uploaded_file is not None:
     try:
         data = pd.read_csv(uploaded_file)
@@ -166,16 +324,12 @@ if uploaded_file is not None:
         n_missing = int(X.isna().sum().sum())
         if n_missing > 0:
             st.warning(
-                f"{n_missing} missing/non-numeric feature value(s) found — "
+                f"⚠️ {n_missing} missing/non-numeric feature value(s) found — "
                 "filled with each column's mean for prediction."
             )
             X = X.fillna(X.mean(numeric_only=True))
 
         X_scaled = scaler.transform(X)
-
-        model = load_model(MODEL_FILES[model_choice])
-        preds = model.predict(X_scaled)
-        proba = model.predict_proba(X_scaled)[:, 1]
 
         # ---- Optional target column for evaluation ----
         target_col = find_target_column(data.columns)
@@ -183,114 +337,192 @@ if uploaded_file is not None:
         if target_col is not None:
             y, err = coerce_target(data[target_col], target_encoder)
             if err:
-                st.warning(f"Found a target column ('{target_col}') but {err} "
-                            "Showing predictions only, without evaluation metrics.")
+                st.warning(
+                    f"Found a target column ('{target_col}') but {err} "
+                    "Showing predictions only, without evaluation metrics."
+                )
                 y = None
 
-        if y is not None:
-            col1, col2 = st.columns([1, 1])
+        pill(f"{len(data):,} rows loaded", "green")
+        st.write("")
 
-            with col1:
-                st.subheader(f"📊 Evaluation Metrics — {model_choice}")
+        # ===================================================
+        # MODE 1 — Single model deep dive
+        # ===================================================
+        if view_mode == "Single Model":
+            with st.spinner(f"Running {model_choice}…"):
+                model = load_model(MODEL_FILES[model_choice])
+                preds = model.predict(X_scaled)
+                proba = model.predict_proba(X_scaled)[:, 1]
+
+            if y is not None:
                 metrics = {
                     "Accuracy": accuracy_score(y, preds),
-                    "AUC Score": roc_auc_score(y, proba),
+                    "AUC": roc_auc_score(y, proba),
                     "Precision": precision_score(y, preds),
                     "Recall": recall_score(y, preds),
                     "F1 Score": f1_score(y, preds),
-                    "MCC Score": matthews_corrcoef(y, preds),
+                    "MCC": matthews_corrcoef(y, preds),
                 }
-                metrics_df = pd.DataFrame(
-                    {"Metric": list(metrics.keys()), "Value": [round(v, 4) for v in metrics.values()]}
-                )
-                st.dataframe(metrics_df, hide_index=True, use_container_width=True)
 
-                st.subheader("📋 Classification Report")
-                report = classification_report(
-                    y, preds, target_names=[str(c) for c in CLASS_NAMES], output_dict=True
-                )
-                st.dataframe(pd.DataFrame(report).transpose().round(3), use_container_width=True)
+                section_title(f"{MODEL_ICONS.get(model_choice, '🔹')} {model_choice} — Evaluation")
 
-            with col2:
-                st.subheader("🔲 Confusion Matrix")
-                cm = confusion_matrix(y, preds)
-                fig, ax = plt.subplots(figsize=(5, 4))
-                sns.heatmap(
-                    cm, annot=True, fmt="d", cmap="Blues", ax=ax,
-                    xticklabels=[str(c) for c in CLASS_NAMES],
-                    yticklabels=[str(c) for c in CLASS_NAMES],
-                )
-                ax.set_xlabel("Predicted")
-                ax.set_ylabel("Actual")
-                st.pyplot(fig)
+                m_cols = st.columns(6)
+                for col, (name, val) in zip(m_cols, metrics.items()):
+                    col.metric(name, f"{val:.3f}")
 
-                st.subheader("🔍 Sample Predictions")
+                st.write("")
+                tab_report, tab_matrix, tab_samples = st.tabs(
+                    ["📋 Classification Report", "🔲 Confusion Matrix", "🔍 Sample Predictions"]
+                )
+
+                with tab_report:
+                    report = classification_report(
+                        y, preds, target_names=[str(c) for c in CLASS_NAMES], output_dict=True
+                    )
+                    st.dataframe(pd.DataFrame(report).transpose().round(3), use_container_width=True)
+
+                with tab_matrix:
+                    render_confusion_matrix(y, preds, CLASS_NAMES)
+
+                with tab_samples:
+                    preview = data.copy()
+                    preview["Predicted"] = [label_for(p) for p in preds]
+                    preview["Actual"] = [label_for(a) for a in y]
+                    preview["Confidence (Churn=Yes)"] = np.round(proba, 4)
+                    st.dataframe(
+                        preview[["Predicted", "Actual", "Confidence (Churn=Yes)"]].head(15),
+                        use_container_width=True,
+                    )
+
+            else:
+                pill("No target column detected — predictions only", "blue")
+                section_title(f"{MODEL_ICONS.get(model_choice, '🔹')} {model_choice} — Predictions")
+
                 preview = data.copy()
                 preview["Predicted"] = [label_for(p) for p in preds]
-                preview["Actual"] = [label_for(a) for a in y]
-                st.dataframe(preview[["Predicted", "Actual"]].head(15), use_container_width=True)
+                preview["Confidence (Churn=Yes)"] = np.round(proba, 4)
 
-            st.markdown("---")
-            st.subheader("📈 Compare All Models on This Data")
-            if st.checkbox("Show comparison across all 5 models"):
-                comparison_rows = []
-                for name, path in MODEL_FILES.items():
-                    m = load_model(path)
-                    p = m.predict(X_scaled)
-                    pr = m.predict_proba(X_scaled)[:, 1]
-                    comparison_rows.append({
-                        "Model": name,
-                        "Accuracy": round(accuracy_score(y, p), 4),
-                        "AUC": round(roc_auc_score(y, pr), 4),
-                        "Precision": round(precision_score(y, p), 4),
-                        "Recall": round(recall_score(y, p), 4),
-                        "F1": round(f1_score(y, p), 4),
-                        "MCC": round(matthews_corrcoef(y, p), 4),
-                    })
-                st.dataframe(pd.DataFrame(comparison_rows), hide_index=True, use_container_width=True)
+                churn_rate = float(np.mean(preds == 1)) if 1 in set(np.unique(preds)) else float(
+                    np.mean([label_for(p) == CLASS_NAMES[1] for p in preds])
+                )
+                k1, k2, k3 = st.columns(3)
+                k1.metric("Rows scored", f"{len(preview):,}")
+                k2.metric("Predicted churn rate", f"{churn_rate:.1%}")
+                k3.metric("Avg. churn confidence", f"{proba.mean():.3f}")
 
+                st.write("")
+                st.dataframe(preview, use_container_width=True)
+
+        # ===================================================
+        # MODE 2 — Compare all models
+        # ===================================================
         else:
-            st.info(
-                "No usable target/label column found in this file, so only "
-                "predictions are shown below (no accuracy/metrics)."
-            )
-            st.subheader(f"🔍 Predictions — {model_choice}")
-            preview = data.copy()
-            preview["Predicted"] = [label_for(p) for p in preds]
-            preview["Confidence (Churn=Yes)"] = np.round(proba, 4)
-            st.dataframe(preview, use_container_width=True)
+            section_title("📈 Compare All Models")
 
-            st.markdown("---")
-            st.subheader("📈 Compare Predictions Across All Models")
-            if st.checkbox("Show predictions from all 5 models"):
+            if y is not None:
+                st.caption("Metrics computed against the target column found in your file.")
+                comparison_rows = []
+                with st.spinner("Scoring all 5 models…"):
+                    for name, path in MODEL_FILES.items():
+                        m = load_model(path)
+                        p = m.predict(X_scaled)
+                        pr = m.predict_proba(X_scaled)[:, 1]
+                        comparison_rows.append({
+                            "Model": f"{MODEL_ICONS.get(name, '🔹')} {name}",
+                            "Accuracy": round(accuracy_score(y, p), 4),
+                            "AUC": round(roc_auc_score(y, pr), 4),
+                            "Precision": round(precision_score(y, p), 4),
+                            "Recall": round(recall_score(y, p), 4),
+                            "F1": round(f1_score(y, p), 4),
+                            "MCC": round(matthews_corrcoef(y, p), 4),
+                        })
+                comp_df = pd.DataFrame(comparison_rows)
+                st.dataframe(
+                    comp_df.style.highlight_max(
+                        subset=["Accuracy", "AUC", "Precision", "Recall", "F1", "MCC"],
+                        color="#DCFCE7",
+                    ),
+                    hide_index=True,
+                    use_container_width=True,
+                )
+                st.write("")
+                st.bar_chart(comp_df.set_index("Model")[["Accuracy", "AUC", "F1"]])
+
+            else:
+                pill("No target column detected — predictions only", "blue")
+                st.caption("No evaluation metrics available; showing each model's prediction per row.")
                 comparison = data.copy()
-                for name, path in MODEL_FILES.items():
-                    m = load_model(path)
-                    p = m.predict(X_scaled)
-                    comparison[name] = [label_for(v) for v in p]
+                with st.spinner("Running all 5 models…"):
+                    for name, path in MODEL_FILES.items():
+                        m = load_model(path)
+                        p = m.predict(X_scaled)
+                        comparison[name] = [label_for(v) for v in p]
                 st.dataframe(comparison, use_container_width=True)
 
     except Exception as e:
         st.error(f"Error processing file: {e}")
 
 else:
+    # ---------------------------------------------------------
+    # Landing state — no file uploaded yet
+    # ---------------------------------------------------------
     st.info("👈 Upload a test CSV from the sidebar to begin.")
-    st.markdown("### About the dataset")
-    st.markdown(
-        "- **Source:** [Telco Customer Churn](https://www.kaggle.com/datasets/blastchar/telco-customer-churn) "
-        "(IBM sample dataset, distributed via Kaggle)\n"
-        "- **Instances:** 7,043 customers (1,409 in the test split provided)\n"
-        "- **Features:** 19 raw attributes (demographics, account info, "
-        f"services subscribed) → {len(feature_names)} features after "
-        "one-hot encoding categorical columns\n"
-        "- **Target:** Binary — whether the customer churned (`Yes` / `No`)"
+
+    col_about, col_flex = st.columns(2)
+
+    with col_about:
+        section_title("📊 About the dataset")
+        st.markdown(
+            "- **Source:** [Telco Customer Churn]"
+            "(https://www.kaggle.com/datasets/blastchar/telco-customer-churn) "
+            "(IBM sample dataset, distributed via Kaggle)\n"
+            "- **Instances:** 7,043 customers (1,409 in the test split provided)\n"
+            "- **Features:** 19 raw attributes (demographics, account info, "
+            f"services subscribed) → **{len(feature_names)}** features after "
+            "one-hot encoding categorical columns\n"
+            "- **Target:** Binary — whether the customer churned (`Yes` / `No`)"
+        )
+
+    with col_flex:
+        section_title("🧩 Flexible test data")
+        st.markdown(
+            f"- Any CSV works as long as it contains the **{len(feature_names)}** "
+            "required (already-encoded) feature columns — in any order, "
+            "alongside any extra columns.\n"
+            "- A target/label column is **optional**; if present under a common "
+            "name (`Churn`, `target`, `class`, `label`, or `y`) it's used to "
+            "compute evaluation metrics, otherwise you'll just get predictions.\n"
+            "- Missing or non-numeric feature values are automatically filled "
+            "with the column mean."
+        )
+
+    st.write("")
+    section_title("🧠 Models available")
+    icon_cols = st.columns(len(MODEL_FILES))
+    for col, name in zip(icon_cols, MODEL_FILES.keys()):
+        with col:
+            st.markdown(
+                f"""
+                <div style="text-align:center; padding:1rem 0.5rem;
+                            border:1px solid #E5E7EB; border-radius:12px;">
+                    <div style="font-size:1.6rem;">{MODEL_ICONS.get(name, '🔹')}</div>
+                    <div style="font-size:0.85rem; font-weight:600; margin-top:0.3rem;">
+                        {name}
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+    st.write("")
+    st.caption(
+        "Tip: choose **Compare All Models** in the sidebar to run all 5 models "
+        "on your data side by side, instead of exploring them one at a time."
     )
-    st.markdown("### Flexible test data")
-    st.markdown(
-        f"Any CSV works as long as it contains the {len(feature_names)} "
-        "required (already-encoded) feature columns — in any order, "
-        "alongside any extra columns. A target/label column is optional; "
-        "if present under a common name (`Churn`, `target`, `class`, "
-        "`label`, or `y`) it's used to compute evaluation metrics, "
-        "otherwise you'll just get predictions."
-    )
+
+st.markdown(
+    '<div class="footer-note">Built with Streamlit · ML Assignment 2 — '
+    'Telco Customer Churn Model Explorer</div>',
+    unsafe_allow_html=True,
+)
